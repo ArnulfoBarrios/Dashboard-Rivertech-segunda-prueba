@@ -20,25 +20,23 @@ export function Header({
   onToggleTheme,
   activeCount,
 }: HeaderProps) {
+  const handleToggleMenu = () => {
+    if (window.innerWidth <= 900) {
+      onToggleMobileSidebar();
+    } else {
+      onToggleSidebar();
+    }
+  };
+
   return (
     <header className="darkone-header">
       <div className="header-left">
-        {/* Toggle Desktop Sidebar */}
+        {/* Single Unified Menu Button */}
         <button
           type="button"
-          className="toggle-sidebar-btn desktop-only-btn"
-          onClick={onToggleSidebar}
-          title="Alternar Menú Lateral"
-        >
-          <Menu size={18} />
-        </button>
-
-        {/* Toggle Mobile Sidebar */}
-        <button
-          type="button"
-          className="toggle-sidebar-btn mobile-only-btn"
-          onClick={onToggleMobileSidebar}
-          title="Abrir Menú Móvil"
+          className="toggle-sidebar-btn"
+          onClick={handleToggleMenu}
+          title="Alternar Menú"
         >
           <Menu size={18} />
         </button>
@@ -83,7 +81,7 @@ export function Header({
           )}
         </button>
 
-        {/* User Operator Profile Chip */}
+        {/* User Profile Chip */}
         <div className="user-profile-chip">
           <div className="user-avatar">RT</div>
           <div className="user-meta">
