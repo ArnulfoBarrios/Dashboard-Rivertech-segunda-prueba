@@ -11,9 +11,10 @@ import { useTelemetryFile } from './hooks/useTelemetryFile';
 import type { DashboardId, ThemeMode } from './types/telemetry';
 
 export function App() {
-  const { records, fleet, fileName, loading, error, loadFile, resetSample } = useTelemetryFile();
+  const { records, fleet, error, resetSample } = useTelemetryFile();
   const [currentDashboard, setCurrentDashboard] = useState<DashboardId>('overview');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [themeMode, setThemeMode] = useState<ThemeMode>('light');
@@ -62,6 +63,8 @@ export function App() {
         onSelectDashboard={setCurrentDashboard}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        isMobileOpen={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
         totalUnitsCount={fleet.length}
       />
 
@@ -75,16 +78,12 @@ export function App() {
         {/* Header */}
         <Header
           onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          loading={loading}
-          recordsCount={records.length}
-          unitsCount={fleet.length}
-          fileName={fileName}
-          onFileDrop={loadFile}
-          onResetSample={resetSample}
-          searchQuery={searchQuery}
+          onToggleMobileSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+          searchTerm={searchQuery}
           onSearchChange={setSearchQuery}
           themeMode={themeMode}
           onToggleTheme={() => setThemeMode(themeMode === 'light' ? 'dark' : 'light')}
+          activeCount={fleet.length}
         />
 
         {/* Content Body */}
@@ -187,7 +186,7 @@ export function App() {
           }}
         >
           <span>RIVERTECH COMANDO FLUVIAL v2.5 // TEMA CLARO AZUL Y BLANCO</span>
-          <span>PROCESADOR DE TELEMETRÍA // 1,000 REGISTROS JSON CARGADOS</span>
+          <span>SISTEMA DE TELEMETRÍA NÁUTICA // {fleet.length} EMBARCACIONES</span>
         </footer>
       </div>
     </div>

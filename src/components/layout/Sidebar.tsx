@@ -7,7 +7,8 @@ import {
   Fuel, 
   ShieldCheck, 
   ChevronLeft, 
-  ChevronRight 
+  ChevronRight,
+  X
 } from 'lucide-react';
 import type { DashboardId } from '../../types/telemetry';
 
@@ -16,6 +17,8 @@ interface SidebarProps {
   onSelectDashboard: (id: DashboardId) => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  isMobileOpen: boolean;
+  onCloseMobile: () => void;
   totalUnitsCount: number;
 }
 
@@ -36,6 +39,8 @@ export function Sidebar({
   onSelectDashboard,
   isCollapsed,
   onToggleCollapse,
+  isMobileOpen,
+  onCloseMobile,
   totalUnitsCount,
 }: SidebarProps) {
   const navGroups: NavGroup[] = [
@@ -61,68 +66,102 @@ export function Sidebar({
     },
   ];
 
+  const handleSelect = (id: DashboardId) => {
+    onSelectDashboard(id);
+    onCloseMobile();
+  };
+
   return (
-    <aside className={`darkone-sidebar ${isCollapsed ? 'is-collapsed' : ''}`}>
-      {/* Brand Header */}
-      <div className="sidebar-brand">
-        <div className="sidebar-brand-icon">
-          <ShieldCheck size={24} />
+    <>
+      {/* Mobile Backdrop Overlay */}
+      <div
+        className={`sidebar-mobile-overlay ${isMobileOpen ? 'is-open' : ''}`}
+        onClick={onCloseMobile}
+      />
+
+      {/* Sidebar Drawer */}
+      <aside
+        className={`darkone-sidebar ${isCollapsed ? 'is-collapsed' : ''} ${
+          isMobileOpen ? 'is-open-mobile' : ''
+        }`}
+      >
+        {/* Brand Header */}
+        <div className="sidebar-brand" style={{ justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div className="sidebar-brand-icon">
+              <ShieldCheck size={24} />
+            </div>
+            {(!isCollapsed || isMobileOpen) && (
+              <div className="sidebar-brand-text">
+                <span className="sidebar-brand-title">RIVERTECH</span>
+                <span className="sidebar-brand-subtitle">Comando Fluvial</span>
+              </div>
+            )}
+          </div>
+
+          {/* Close button on mobile */}
+          {isMobileOpen && (
+            <button
+              type="button"
+              className="toggle-sidebar-btn"
+              onClick={onCloseMobile}
+              style={{ width: '32px', height: '32px' }}
+            >
+              <X size={18} />
+            </button>
+          )}
         </div>
-        {!isCollapsed && (
-          <div className="sidebar-brand-text">
-            <span className="sidebar-brand-title">RIVERTECH</span>
-            <span className="sidebar-brand-subtitle">Comando Fluvial</span>
-          </div>
-        )}
-      </div>
 
-      {/* Navigation Groups */}
-      <nav className="sidebar-nav">
-        {navGroups.map((group) => (
-          <div key={group.title} className="sidebar-group">
-            {!isCollapsed && <div className="sidebar-group-title">{group.title}</div>}
-            <ul className="sidebar-menu">
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const isActive = currentDashboard === item.id;
-                return (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      className={`sidebar-item-btn ${isActive ? 'is-active' : ''}`}
-                      onClick={() => onSelectDashboard(item.id)}
-                      title={isCollapsed ? item.label : undefined}
-                    >
-                      <span className="item-icon">
-                        <Icon size={19} />
-                      </span>
-                      {!isCollapsed && <span>{item.label}</span>}
-                      {!isCollapsed && item.badge && (
-                        <span className="sidebar-item-badge">{item.badge}</span>
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
-      </nav>
+        {/* Navigation Groups */}
+        <nav className="sidebar-nav">
+          {navGroups.map((group) => (
+            <div key={group.title} className="sidebar-group">
+              {(!isCollapsed || isMobileOpen) && (
+                <div className="sidebar-group-title">{group.title}</div>
+              )}
+              <ul className="sidebar-menu">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = currentDashboard === item.id;
+                  return (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        className={`sidebar-item-btn ${isActive ? 'is-active' : ''}`}
+                        onClick={() => handleSelect(item.id)}
+                        title={isCollapsed && !isMobileOpen ? item.label : undefined}
+                      >
+                        <span className="item-icon">
+                          <Icon size={19} />
+                        </span>
+                        {(!isCollapsed || isMobileOpen) && <span>{item.label}</span>}
+                        {(!isCollapsed || isMobileOpen) && item.badge && (
+                          <span className="sidebar-item-badge">{item.badge}</span>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </nav>
 
-      {/* Collapse Toggle Footer */}
-      <div style={{ padding: '16px 12px', borderTop: '1px solid var(--border-subtle)' }}>
-        <button
-          type="button"
-          className="sidebar-item-btn"
-          onClick={onToggleCollapse}
-          style={{ justifyContent: isCollapsed ? 'center' : 'flex-start' }}
-        >
-          <span className="item-icon">
-            {isCollapsed ? <ChevronRight size={19} /> : <ChevronLeft size={19} />}
-          </span>
-          {!isCollapsed && <span>Plegar Menú</span>}
-        </button>
-      </div>
-    </aside>
+        {/* Collapse Toggle Footer */}
+        <div style={{ padding: '16px 12px', borderTop: '1px solid var(--border-subtle)' }}>
+          <button
+            type="button"
+            className="sidebar-item-btn"
+            onClick={onToggleCollapse}
+            style={{ justifyContent: isCollapsed && !isMobileOpen ? 'center' : 'flex-start' }}
+          >
+            <span className="item-icon">
+              {isCollapsed ? <ChevronRight size={19} /> : <ChevronLeft size={19} />}
+            </span>
+            {(!isCollapsed || isMobileOpen) && <span>Plegar Menú</span>}
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }

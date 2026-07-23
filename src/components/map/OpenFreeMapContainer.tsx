@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Sun, Moon, Box } from 'lucide-react';
@@ -22,20 +22,48 @@ export function OpenFreeMapContainer({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const [useFallbackRaster, setUseFallbackRaster] = useState(false);
 
-  // Official OpenFreeMap Style URLs
-  const getStyleUrl = (style: MapStyle): string => {
+  // Return style URL or Raster Style Object as fallback for Vercel CORS/Tile delays
+  const getStyleDefinition = (style: MapStyle): maplibregl.StyleSpecification | string => {
+    if (useFallbackRaster) {
+      const tileUrl =
+        style === 'fiord'
+          ? 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+          : 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+
+      return {
+        version: 8,
+        sources: {
+          'fallback-tiles': {
+            type: 'raster',
+            tiles: [tileUrl],
+            tileSize: 256,
+            attribution: '&copy; OpenStreetMap &copy; CARTO',
+          },
+        },
+        layers: [
+          {
+            id: 'fallback-layer',
+            type: 'raster',
+            source: 'fallback-tiles',
+            minzoom: 0,
+            maxzoom: 19,
+          },
+        ],
+      };
+    }
+
     if (style === 'fiord') {
       return 'https://tiles.openfreemap.org/styles/fiord';
     }
     return 'https://tiles.openfreemap.org/styles/liberty';
   };
 
-  // Helper function to sync markers on map
+  // Sync Markers
   const syncMarkers = (map: maplibregl.Map) => {
     if (!map) return;
 
-    // Remove markers no longer in fleet
     markersRef.current.forEach((marker, id) => {
       if (!fleet.some((u) => u.deviceId === id)) {
         marker.remove();
@@ -51,13 +79,11 @@ export function OpenFreeMapContainer({
       let marker = markersRef.current.get(unit.deviceId);
 
       if (!marker) {
-        // Outer container
         const containerEl = document.createElement('div');
         containerEl.style.width = '36px';
         containerEl.style.height = '36px';
         containerEl.style.cursor = 'pointer';
 
-        // Inner container for styling and isolated SVG rotation
         const innerEl = document.createElement('div');
         innerEl.className = `custom-vessel-marker ${isSelected ? 'is-selected' : ''}`;
         innerEl.style.setProperty('--marker-color', markerColor);
@@ -104,7 +130,6 @@ export function OpenFreeMapContainer({
 
         markersRef.current.set(unit.deviceId, marker);
       } else {
-        // Update existing marker position
         marker.setLngLat([unit.latest.longitude, unit.latest.latitude]);
         marker.addTo(map);
 
@@ -124,7 +149,7 @@ export function OpenFreeMapContainer({
     });
   };
 
-  // Initialize Map ONCE on Mount
+  // Mount Map Instance
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
@@ -134,7 +159,7 @@ export function OpenFreeMapContainer({
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: getStyleUrl(mapStyle),
+      style: getStyleDefinition(mapStyle),
       center: [initialLng, initialLat],
       zoom: mapStyle === '3d' ? 12 : 9,
       pitch: mapStyle === '3d' ? 60 : 0,
@@ -164,9 +189,16 @@ export function OpenFreeMapContainer({
       syncMarkers(map);
     });
 
+    map.on('error', (e) => {
+      // Switch to reliable raster fallback if vector tiles fail to load
+      if (!useFallbackRaster && e.error && e.error.message && e.error.message.includes('style')) {
+        console.warn('Switching map to high-reliability tile fallback...');
+        setUseFallbackRaster(true);
+      }
+    });
+
     mapRef.current = map;
 
-    // Resize container after initial paint
     setTimeout(triggerResize, 100);
     setTimeout(triggerResize, 500);
 
@@ -182,23 +214,23 @@ export function OpenFreeMapContainer({
       map.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [useFallbackRaster]);
 
-  // Change Style dynamically without destroying map instance
+  // Handle Map Style Changes
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    map.setStyle(getStyleUrl(mapStyle));
+    map.setStyle(getStyleDefinition(mapStyle));
 
     if (mapStyle === '3d') {
       map.easeTo({ pitch: 60, bearing: -25, zoom: Math.max(map.getZoom(), 11), duration: 1000 });
     } else {
       map.easeTo({ pitch: 0, bearing: 0, duration: 1000 });
     }
-  }, [mapStyle]);
+  }, [mapStyle, useFallbackRaster]);
 
-  // Keep markers synced when fleet or selectedDeviceId changes
+  // Sync Markers on Fleet Update
   useEffect(() => {
     const map = mapRef.current;
     if (map) {
@@ -206,7 +238,7 @@ export function OpenFreeMapContainer({
     }
   }, [fleet, selectedDeviceId]);
 
-  // Fly to selected vessel
+  // Fly to selected unit
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !selectedDeviceId) return;
@@ -227,19 +259,19 @@ export function OpenFreeMapContainer({
       style={{
         width: '100%',
         height: '100%',
-        minHeight: '580px',
+        minHeight: '480px',
         position: 'relative',
         background: '#e2e8f0',
       }}
     >
-      {/* Map Style Selector Bar */}
+      {/* Style Bar */}
       <div className="map-style-bar" style={{ zIndex: 20 }}>
         <button
           type="button"
           className={`btn-darkone-outline ${mapStyle === 'liberty' ? 'is-active' : ''}`}
           onClick={() => onChangeMapStyle('liberty')}
           title="Estilo Liberty Claro"
-          style={{ padding: '6px 14px', fontSize: '11px' }}
+          style={{ padding: '6px 12px', fontSize: '11px' }}
         >
           <Sun size={14} />
           <span>Liberty (Claro)</span>
@@ -250,7 +282,7 @@ export function OpenFreeMapContainer({
           className={`btn-darkone-outline ${mapStyle === 'fiord' ? 'is-active' : ''}`}
           onClick={() => onChangeMapStyle('fiord')}
           title="Estilo Fiord Oscuro"
-          style={{ padding: '6px 14px', fontSize: '11px' }}
+          style={{ padding: '6px 12px', fontSize: '11px' }}
         >
           <Moon size={14} />
           <span>Fiord (Oscuro)</span>
@@ -261,14 +293,14 @@ export function OpenFreeMapContainer({
           className={`btn-darkone-outline ${mapStyle === '3d' ? 'is-active' : ''}`}
           onClick={() => onChangeMapStyle('3d')}
           title="Vista Perspectiva 3D"
-          style={{ padding: '6px 14px', fontSize: '11px' }}
+          style={{ padding: '6px 12px', fontSize: '11px' }}
         >
           <Box size={14} />
           <span>Vista 3D</span>
         </button>
       </div>
 
-      <div ref={mapContainerRef} style={{ width: '100%', height: '100%', minHeight: '580px' }} />
+      <div ref={mapContainerRef} style={{ width: '100%', height: '100%', minHeight: '480px' }} />
     </div>
   );
 }
