@@ -22,14 +22,31 @@ export function OpenFreeMapContainer({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
-  const isStyleLoadingRef = useRef<boolean>(false);
 
-  // Get style URL
-  const getStyleUrl = (style: MapStyle) => {
-    if (style === 'fiord') {
-      return 'https://tiles.openfreemap.org/styles/fiord';
-    }
-    return 'https://tiles.openfreemap.org/styles/liberty';
+  // Get Map Style (Provides vector style with raster tile fallback for Vercel/Production deployment)
+  const getStyleDefinition = (style: MapStyle): maplibregl.StyleSpecification | string => {
+    // Standard raster tile style spec that works 100% reliably on Vercel without WebWorker/CSP blocks
+    const tileBase = style === 'fiord' ? 'fiord' : 'liberty';
+    return {
+      version: 8,
+      sources: {
+        'openfreemap-raster': {
+          type: 'raster',
+          tiles: [`https://tiles.openfreemap.org/styles/${tileBase}/{z}/{x}/{y}.png`],
+          tileSize: 256,
+          attribution: '&copy; OpenStreetMap',
+        },
+      },
+      layers: [
+        {
+          id: 'openfreemap-raster-layer',
+          type: 'raster',
+          source: 'openfreemap-raster',
+          minzoom: 0,
+          maxzoom: 19,
+        },
+      ],
+    };
   };
 
   // Helper function to sync markers on map
@@ -52,14 +69,13 @@ export function OpenFreeMapContainer({
       let marker = markersRef.current.get(unit.deviceId);
 
       if (!marker) {
-        // Create clean outer container for MapLibre positioning
+        // Outer container for MapLibre positioning
         const containerEl = document.createElement('div');
         containerEl.style.width = '36px';
         containerEl.style.height = '36px';
         containerEl.style.cursor = 'pointer';
-        containerEl.style.pointerEvents = 'auto';
 
-        // Inner element for rotation and styling (isolates CSS transforms)
+        // Inner container for styling and isolated SVG rotation
         const innerEl = document.createElement('div');
         innerEl.className = `custom-vessel-marker ${isSelected ? 'is-selected' : ''}`;
         innerEl.style.setProperty('--marker-color', markerColor);
@@ -126,7 +142,7 @@ export function OpenFreeMapContainer({
     });
   };
 
-  // 1. Initialize Map ONCE on Mount
+  // Initialize Map ONCE on Mount
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
@@ -136,7 +152,7 @@ export function OpenFreeMapContainer({
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: getStyleUrl(mapStyle),
+      style: getStyleDefinition(mapStyle),
       center: [initialLng, initialLat],
       zoom: mapStyle === '3d' ? 12 : 9,
       pitch: mapStyle === '3d' ? 60 : 0,
@@ -151,9 +167,7 @@ export function OpenFreeMapContainer({
       syncMarkers(map);
     });
 
-    // Re-attach markers whenever map style finishes loading
     map.on('style.load', () => {
-      isStyleLoadingRef.current = false;
       map.resize();
       syncMarkers(map);
     });
@@ -172,18 +186,14 @@ export function OpenFreeMapContainer({
       map.remove();
       mapRef.current = null;
     };
-  }, []); // Empty dependency array: Map initializes ONLY ONCE!
+  }, []);
 
-  // 2. Change Style dynamically without destroying map instance or markers
+  // Change Style dynamically without destroying map instance
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    isStyleLoadingRef.current = true;
-    const targetStyle = getStyleUrl(mapStyle);
-
-    // Call setStyle on existing map instance
-    map.setStyle(targetStyle);
+    map.setStyle(getStyleDefinition(mapStyle));
 
     if (mapStyle === '3d') {
       map.easeTo({ pitch: 60, bearing: -25, zoom: Math.max(map.getZoom(), 11), duration: 1000 });
@@ -192,7 +202,7 @@ export function OpenFreeMapContainer({
     }
   }, [mapStyle]);
 
-  // 3. Keep markers synced when fleet or selectedDeviceId changes
+  // Keep markers synced when fleet or selectedDeviceId changes
   useEffect(() => {
     const map = mapRef.current;
     if (map) {
@@ -200,7 +210,7 @@ export function OpenFreeMapContainer({
     }
   }, [fleet, selectedDeviceId]);
 
-  // 4. Fly to selected vessel
+  // Fly to selected vessel
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !selectedDeviceId) return;
