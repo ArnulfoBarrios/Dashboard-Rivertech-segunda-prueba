@@ -23,30 +23,12 @@ export function OpenFreeMapContainer({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
 
-  // Get Map Style (Provides vector style with raster tile fallback for Vercel/Production deployment)
-  const getStyleDefinition = (style: MapStyle): maplibregl.StyleSpecification | string => {
-    // Standard raster tile style spec that works 100% reliably on Vercel without WebWorker/CSP blocks
-    const tileBase = style === 'fiord' ? 'fiord' : 'liberty';
-    return {
-      version: 8,
-      sources: {
-        'openfreemap-raster': {
-          type: 'raster',
-          tiles: [`https://tiles.openfreemap.org/styles/${tileBase}/{z}/{x}/{y}.png`],
-          tileSize: 256,
-          attribution: '&copy; OpenStreetMap',
-        },
-      },
-      layers: [
-        {
-          id: 'openfreemap-raster-layer',
-          type: 'raster',
-          source: 'openfreemap-raster',
-          minzoom: 0,
-          maxzoom: 19,
-        },
-      ],
-    };
+  // Official OpenFreeMap Style URLs
+  const getStyleUrl = (style: MapStyle): string => {
+    if (style === 'fiord') {
+      return 'https://tiles.openfreemap.org/styles/fiord';
+    }
+    return 'https://tiles.openfreemap.org/styles/liberty';
   };
 
   // Helper function to sync markers on map
@@ -69,7 +51,7 @@ export function OpenFreeMapContainer({
       let marker = markersRef.current.get(unit.deviceId);
 
       if (!marker) {
-        // Outer container for MapLibre positioning
+        // Outer container
         const containerEl = document.createElement('div');
         containerEl.style.width = '36px';
         containerEl.style.height = '36px';
@@ -152,7 +134,7 @@ export function OpenFreeMapContainer({
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: getStyleDefinition(mapStyle),
+      style: getStyleUrl(mapStyle),
       center: [initialLng, initialLat],
       zoom: mapStyle === '3d' ? 12 : 9,
       pitch: mapStyle === '3d' ? 60 : 0,
@@ -162,17 +144,31 @@ export function OpenFreeMapContainer({
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: true, showZoom: true }), 'top-right');
 
+    const triggerResize = () => {
+      requestAnimationFrame(() => {
+        if (map) map.resize();
+      });
+    };
+
     map.on('load', () => {
-      map.resize();
+      triggerResize();
       syncMarkers(map);
     });
 
+    map.on('idle', () => {
+      triggerResize();
+    });
+
     map.on('style.load', () => {
-      map.resize();
+      triggerResize();
       syncMarkers(map);
     });
 
     mapRef.current = map;
+
+    // Resize container after initial paint
+    setTimeout(triggerResize, 100);
+    setTimeout(triggerResize, 500);
 
     const handleResize = () => {
       if (mapRef.current) mapRef.current.resize();
@@ -193,7 +189,7 @@ export function OpenFreeMapContainer({
     const map = mapRef.current;
     if (!map) return;
 
-    map.setStyle(getStyleDefinition(mapStyle));
+    map.setStyle(getStyleUrl(mapStyle));
 
     if (mapStyle === '3d') {
       map.easeTo({ pitch: 60, bearing: -25, zoom: Math.max(map.getZoom(), 11), duration: 1000 });
@@ -226,9 +222,18 @@ export function OpenFreeMapContainer({
   }, [selectedDeviceId, mapStyle]);
 
   return (
-    <div className="openfreemap-container" style={{ width: '100%', height: '100%', position: 'relative' }}>
+    <div
+      className="openfreemap-container"
+      style={{
+        width: '100%',
+        height: '100%',
+        minHeight: '580px',
+        position: 'relative',
+        background: '#e2e8f0',
+      }}
+    >
       {/* Map Style Selector Bar */}
-      <div className="map-style-bar">
+      <div className="map-style-bar" style={{ zIndex: 20 }}>
         <button
           type="button"
           className={`btn-darkone-outline ${mapStyle === 'liberty' ? 'is-active' : ''}`}
@@ -263,7 +268,7 @@ export function OpenFreeMapContainer({
         </button>
       </div>
 
-      <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
+      <div ref={mapContainerRef} style={{ width: '100%', height: '100%', minHeight: '580px' }} />
     </div>
   );
 }
